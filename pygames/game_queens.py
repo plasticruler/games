@@ -176,11 +176,10 @@ def get_square_at(pos):
     return size_manager.get_row_and_col_from_pos(pos)    
             
 def draw_grid(screen):    
-    for x in range(size_manager.rows+1):        
-        pygame.draw.line(screen, COLOURS.WHITE, size_manager.get_pos_by_row_and_col(x, 0), size_manager.get_pos_by_row_and_col(x,size_manager.cols), 1)        
-        for y in range(size_manager.cols+1):
-            pygame.draw.line(screen, COLOURS.WHITE, size_manager.get_pos_by_row_and_col(0, y), size_manager.get_pos_by_row_and_col(size_manager.rows, y), 1)
-    
+    for x in range(size_manager.rows):
+        pygame.draw.line(screen, COLOURS.WHITE, size_manager.get_pos_by_row_and_col(x,0), size_manager.get_pos_by_row_and_col(x,size_manager.cols), 1)        
+        for y in range(size_manager.cols):
+            pygame.draw.line(screen, COLOURS.WHITE, size_manager.get_pos_by_row_and_col(0,y), size_manager.get_pos_by_row_and_col(size_manager.rows,y), 1)        
                
 def draw_text_in_block(text,pos,screen, font_size=11):    
     font = pygame.font.Font("freesansbold.ttf", font_size)    
@@ -201,16 +200,16 @@ def update_score():
     pygame.display.set_caption("SAME GAME")
 ########################################################################################    
 pygame.init()
-ROWS = 10
-COLS = 30
-SQUARE_SIZE = 50
+ROWS = 5
+COLS = 5
+SQUARE_SIZE = 100
 
 size_manager = BOARD_MANAGER(ROWS, COLS, SQUARE_SIZE)
 
 # Set the width and height of the screen [width, height]
 size = (size_manager.width, size_manager.height)
 
-screen = pygame.display.set_mode((size[0]+1, size[1]+1)) 
+screen = pygame.display.set_mode((size[0], size[1])) 
  
 # Loop until the user clicks the close button.
 done = False
@@ -267,7 +266,7 @@ while not done:
     
     for k in grid_data:              
         pos = size_manager.get_pos_by_row_and_col(k[0], k[1])        
-        pygame.draw.rect(screen, grid_data[k].Colour, [pos[0]+1 , pos[1]+1, size_manager.blockSize-1 ,  size_manager.blockSize-1])
+        pygame.draw.rect(screen, grid_data[k].Colour, [pos[0]+1 , pos[1]+1, SQUARE_SIZE-1 , SQUARE_SIZE-1])
     
     for k in [m for m in grid_data if grid_data[m].Square_Type == TILE_TYPE.OUTLINED]:
         marker_size = SQUARE_SIZE // 2
