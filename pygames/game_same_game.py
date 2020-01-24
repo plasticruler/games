@@ -13,10 +13,9 @@ class TILE_TYPE(Enum):
     OUTLINED = 8
 
 class SQUARE_DATA:    
-    def __init__(self, t, label="P"):        
-        self.Square_Type = t
-        self.Label = label
-        d = random.random()        
+    def __init__(self, t, m=0):        
+        self.Square_Type = t        
+        d = random.random()
         if d < 0.2:
             self.Colour = COLOURS.RED
         else:
@@ -28,6 +27,7 @@ class Position:
     def __init__(self, width, height):
         self.width = width
         self.height = height
+        
 class BOARD_MANAGER:
     def __init__(self, rows, cols, blockSize):
         self.rows = rows
@@ -44,7 +44,7 @@ class BOARD_MANAGER:
         return (col * self.blockSize, row * self.blockSize)
     
     def get_row_and_col_from_pos(self, pos):
-        return ((pos[1] // self.blockSize), (pos[0] // self.blockSize))
+        return (pos[1] // self.blockSize, pos[0] // self.blockSize)
     
     def is_row_valid(self, row):
         return row < self.rows 
@@ -67,7 +67,7 @@ class COLOURS:
         if not select:
             return (random.randrange(0, 255), random.randrange(0, 255), random.randrange(0, 255))
         else:
-            return random.choice([COLOURS.WHITE, COLOURS.YELLOW, COLOURS.RED, COLOURS.INDIGO, COLOURS.GREEN, COLOURS.ORANGE, COLOURS.SKY_BLUE])
+            return random.choice([COLOURS.RED, COLOURS.GREY, COLOURS.INDIGO, COLOURS.WHITE, COLOURS.GREEN, COLOURS.ORANGE, COLOURS.SKY_BLUE, COLOURS.YELLOW])
 
 
 class Game:
@@ -80,137 +80,176 @@ class Game:
 
 NUMBER_OF_SQUARES_TO_UNCOVER = 1
 
-grid_data = {}
-def has_top(clicked_square):
-    #check row
-    return (clicked_square[0] >= 1) 
+grid_data = defaultdict(lambda:SQUARE_DATA(TILE_TYPE.VISIBLE))
 
-def has_bottom(clicked_square):
-    return (clicked_square[0] < size_manager.rows-1)
+def has_top(pos, size):
+    return not (pos[1] == 0)
 
-def has_left(clicked_square):
-    return (clicked_square[1] > 0)
+def has_bottom(pos, size, steps=10):
+    return not (pos[1] + steps >= size[1])
+
+def has_left(pos, size, steps=10):
+    return not (pos[0] == 0 or pos[0] + 1 - (steps) <= 0)
     
-def has_right(clicked_square):
-    return (clicked_square[1] < size_manager.cols-1)
+def has_right(pos, size, steps=10):
+    return (pos[0] + steps < size[0])
     
-def process_blocks(clicked_square, target_color):        
-    if grid_data[clicked_square].Square_Type in [TILE_TYPE.COLLAPSED, TILE_TYPE.COLLAPSABLE, TILE_TYPE.OUTLINED]:
+def process_blocks(pos, size, target_color, steps=10):        
+    if grid_data[pos].Square_Type in [TILE_TYPE.COLLAPSED, TILE_TYPE.COLLAPSABLE, TILE_TYPE.OUTLINED]:
         return
     
-    if grid_data[clicked_square].Colour == target_color:                        
-        neighbouring_squares = get_neighbouring_cross(clicked_square)
-        grid_data[clicked_square].Square_Type = TILE_TYPE.OUTLINED
+    if grid_data[pos].Colour == target_color:                        
+        neighbouring_squares = get_neighbouring_cross(pos, size, steps)
+        grid_data[pos].Square_Type = TILE_TYPE.OUTLINED
         for square in neighbouring_squares:        
-            process_blocks(square, target_color)
+            process_blocks(square, size, target_color, steps)
 
-def apply_collapsed(size, rows, cols):    
+def apply_collapsed(size, rows, cols):
+    """from bottom row work way to top, row by row
+       for each found collapsable block replace it with the block above it and pull
+       it all down       
+    """        
     move_left = False
     for col in range(0, cols): 
-        blocks = [b for b in get_blocks_by_col(col) if grid_data[b].Square_Type == TILE_TYPE.OUTLINED]        
+        blocks = [b for b in get_blocks_by_col(col, size, SQUARE_SIZE) if grid_data[b].Square_Type == TILE_TYPE.OUTLINED]        
         #collapse this column
         
         for b in blocks:              
-            move_block_down(b)  #works brilliantly
-    
-    for col in range(cols):
-        if does_col_need_left_shift(col):            
-            move_col_left(col)
+            move_block_down(b, size)  #works brilliantly
+        if does_col_need_left_shift(col, size):
+            print(f"Moving col {col} left")
+            move_col_left(col, size)
 
-def move_block_down(square):
-    if grid_data[square].Square_Type == TILE_TYPE.COLLAPSED:
+def move_block_down(pos, size):
+    if grid_data[pos].Square_Type == TILE_TYPE.COLLAPSED:
         return
 
-    if not has_top(square):
-        grid_data[square].Colour = COLOURS.BLACK
-        grid_data[square].Square_Type = TILE_TYPE.COLLAPSED
+    if not has_top(pos, size):
+        grid_data[pos].Colour = COLOURS.BLACK
+        grid_data[pos].Square_Type = TILE_TYPE.COLLAPSED
         return    
 
-    top = (square[0]-1, square[1])
+    top = get_square_at((pos[0], pos[1] - SQUARE_SIZE))
     
-    grid_data[square].Colour = grid_data[top].Colour
-    grid_data[square].Label = grid_data[top].Label
-    grid_data[square].Square_Type = TILE_TYPE.VISIBLE
+    grid_data[pos].Colour = grid_data[top].Colour
+    grid_data[pos].Square_Type = TILE_TYPE.VISIBLE
     
-    move_block_down(top)
-
-def does_col_need_left_shift(col):
-    blocks = get_blocks_by_col(col)    
+    move_block_down(top, size)
+def does_col_need_left_shift(col, size):
+    blocks = get_blocks_by_col(col, size, SQUARE_SIZE)    
     return len(blocks) == len([b for b in blocks if grid_data[b].Colour == COLOURS.BLACK])
     
-def move_col_left(col):    
-    for r in range(size_manager.rows):        
-        if not has_right((r,col)):
-            grid_data[(r,col)].Colour = COLOURS.BLACK
-            grid_data[(r,col)].Square_Type = TILE_TYPE.VISIBLE                
-        else:            
-            grid_data[(r, col)].Colour = grid_data[(r, col + 1)].Colour
-            grid_data[(r,col)].Label = grid_data[(r,col+1)].Label
-            grid_data[(r,col)].Square_Type = TILE_TYPE.VISIBLE            
-            
-            grid_data[(r,col+1)].Colour = COLOURS.BLACK
-            grid_data[(r,col+1)].Square_Type = TILE_TYPE.VISIBLE
+def move_col_left(col, size):
+    print(f"Checking col {col}")
+    for r in range(ROWS):
+        for c in range(COLS):
+            pos = (c * SQUARE_SIZE, r * SQUARE_SIZE)
+            pos_right = (c * SQUARE_SIZE, 1 + r * SQUARE_SIZE)        
+            if not has_right(pos, size):
+                grid_data[pos].Colour = COLOURS.BLACK
+                grid_data[pos].Square_Type = TILE_TYPE.VISIBLE                
+            else:            
+                grid_data[pos].Colour = grid_data[pos_right].Colour
+                grid_data[pos].Square_Type = TILE_TYPE.VISIBLE            
+                grid_data[pos_right].Colour = COLOURS.BLACK
+                grid_data[pos].Square_Type = TILE_TYPE.VISIBLE
    
-def get_blocks_by_col(col):    
-    if col-1 > size_manager.cols or col < 0:
+def get_blocks_by_row(row, size, steps=10):
+    cols = size[0] // steps #width
+    rows = size[1] // steps #height
+    if row > rows or row < 0:
         return []    
     blocks = []
-    for r in range(size_manager.rows):
-        blocks.append((r,col))    
-    return blocks
+    for r in range(cols):
+        blocks.append(get_square_at((r * steps, row * steps)))    
+    return [b for b in blocks]
 
-def get_neighbouring_cross(square):    
+def get_blocks_by_col(col, size, steps=10):
+    cols = size[0] // steps #width
+    rows = size[1] // steps #height
+    if col > cols or col < 0:
+        return []    
+    blocks = []
+    for r in range(rows):
+        blocks.append(get_square_at((col * steps, r * steps)))    
+    return [b for b in blocks]
+
+def get_neighbouring_cross(pos, size, steps=10):
+    pos = get_square_at(pos)
     squares = []
-    if has_top(square):
-        squares.append((square[0]-1,square[1])) #T        
-    if has_bottom(square):
-        squares.append((square[0]+1, square[1])) #B        
-    if has_right(square):
-        squares.append((square[0], square[1]+1))  #R
-    if has_left(square):
-        squares.append((square[0],square[1]-1))  #L    
+    if has_top(pos, size):
+        squares.append(get_square_at((pos[0], pos[1]-steps))) #T        
+    if has_bottom(pos, size, steps):
+        squares.append(get_square_at((pos[0], pos[1]+steps))) #B        
+    if has_right(pos, size, steps):
+        squares.append(get_square_at((pos[0] + steps, pos[1])))  #R
+    if has_left(pos, size, steps):
+        squares.append(get_square_at((pos[0] - steps, pos[1])))  #L
     return squares
 
+def get_neighbouring_squares(pos, size, steps=10):
+    pos = get_square_at(pos)
+    #T,TR,R,BR,B,BL,L,TL
+    squares = []
+    if has_top(pos, size):
+        squares.append(get_square_at((pos[0], pos[1]-steps))) #T
+        if has_left(pos, size, steps):
+            squares.append(get_square_at((pos[0] - steps, pos[1] - steps)))  #TL
+        if has_right(pos, size, steps):
+            squares.append(get_square_at((pos[0] + steps, pos[1] - steps)))  #TR
+    if has_bottom(pos, size, steps):
+        squares.append(get_square_at((pos[0], pos[1]+steps))) #B
+        if has_left(pos, size, steps):
+            squares.append(get_square_at((pos[0] - steps, pos[1] + steps)))  #BL
+        if has_right(pos, size, steps):
+            squares.append(get_square_at((pos[0] + steps, pos[1] + steps)))  #BR
+    if has_right(pos, size, steps):
+        squares.append(get_square_at((pos[0] + steps, pos[1])))  #R
+    if has_left(pos, size, steps):
+        squares.append(get_square_at((pos[0] - steps, pos[1])))  #L
+    return squares
     
 def get_square_at(pos):        
     return size_manager.get_row_and_col_from_pos(pos)    
             
-def draw_grid(screen):    
-    for x in range(size_manager.rows+1):        
-        pygame.draw.line(screen, COLOURS.WHITE, size_manager.get_pos_by_row_and_col(x, 0), size_manager.get_pos_by_row_and_col(x,size_manager.cols), 1)        
-        for y in range(size_manager.cols+1):
-            pygame.draw.line(screen, COLOURS.WHITE, size_manager.get_pos_by_row_and_col(0, y), size_manager.get_pos_by_row_and_col(size_manager.rows, y), 1)
-    
+def draw_grid(screen, size, steps=10):    
+    for x in range(0, size[0] + 1, steps):
+        pygame.draw.line(screen, COLOURS.WHITE, (x, 0), (x, size[1]), 1)        
+        for y in range(0,size[1]+1, steps):
+            pygame.draw.line(screen, COLOURS.WHITE, (0, y), (size[0], y), 1)                       
                
-def draw_text_in_block(text,pos,screen, font_size=11):    
-    font = pygame.font.Font("freesansbold.ttf", font_size)    
-    t = font.render(text, True, COLOURS.BLACK, COLOURS.WHITE)
+def draw_text_in_block(text, x,y,screen, size,font_size=8, steps=10):
+    pos = get_square_at((x, y), size, steps)    
+    font = pygame.font.Font("freesansbold.ttf", font_size)
+    t = font.render(text, True, COLOURS.BLACK, COLOURS.GREEN)
     textRect = t.get_rect()
-    textRect.center = ((pos[0]+SQUARE_SIZE//2 ), (pos[1] +SQUARE_SIZE//2))
+    textRect.center = ((pos[0]+steps//2 ), (pos[1] +steps//2))
     screen.blit(t, textRect)
     
-def create_level(size):    
+def create_level(size, grid_data):    
     for col in range(COLS):        
-        for row in range(ROWS):
-            grid_data[(row,col)] = SQUARE_DATA(TILE_TYPE.VISIBLE)              
-            grid_data[(row, col)].Square_Type = TILE_TYPE.VISIBLE
-            grid_data[(row,col)].Label = f"{row}:{col}"
+        for row in range(ROWS):            
+            s = size_manager.get_pos_by_row_and_col(row,col)
+            grid_data[(row,col)].Square_Type = TILE_TYPE.VISIBLE
 
+def apply_left_shifts():
+
+    pass
 def update_score():
     s = f"SAME GAME{1}"
     pygame.display.set_caption("SAME GAME")
 ########################################################################################    
 pygame.init()
 ROWS = 10
-COLS = 30
-SQUARE_SIZE = 50
+COLS = 20
+SQUARE_SIZE = 40
 
 size_manager = BOARD_MANAGER(ROWS, COLS, SQUARE_SIZE)
 
 # Set the width and height of the screen [width, height]
 size = (size_manager.width, size_manager.height)
 
-screen = pygame.display.set_mode((size[0]+1, size[1]+1)) 
+screen = pygame.display.set_mode((size[0]+2, size[1]+2)) 
  
 # Loop until the user clicks the close button.
 done = False
@@ -226,7 +265,7 @@ pos = (0, 0)
 clicked_square = (0, 0)
 selected_squares = []
 
-create_level(size) #fill with mines
+create_level(size, grid_data) #fill with mines
 print(f"rows: {ROWS} cols: {COLS}")
                                
 # -------- Main Program Loop -----------
@@ -241,19 +280,21 @@ while not done:
         if event.type == pygame.MOUSEBUTTONUP and event.button == BUTTON_LEFT and not handle_left_click:            
             handle_left_click = True
             pos = pygame.mouse.get_pos()   
-            clicked_square = size_manager.get_row_and_col_from_pos(pos)            
-            clicked_row, clicked_col = size_manager.get_row_and_col_from_pos(pos)                        
+            clicked_square = get_square_at(pos)
+            print(f"Clicked square is: {clicked_square}")          
+            clicked_row, clicked_col = size_manager.get_row_and_col_from_pos(pos)            
+            
             if grid_data[clicked_square].Square_Type == TILE_TYPE.OUTLINED: #the user has clicked an outlined block                
                 apply_collapsed(size, ROWS, COLS)                
                 continue
                         
             for k in [m for m in grid_data if grid_data[m].Square_Type == TILE_TYPE.OUTLINED]:
-                grid_data[k].Square_Type = TILE_TYPE.VISIBLE            
+                grid_data[k].Square_Type = TILE_TYPE.VISIBLE
             
-            process_blocks(clicked_square, grid_data[clicked_square].Colour)  #the game runs inside this                                    
+            process_blocks(clicked_square, size, grid_data[clicked_square].Colour, SQUARE_SIZE)  #the game runs inside this                        
+            
             
             #update_score()
-
     # --- Game logic should go here
     
     # --- Screen-clearing code goes here          
@@ -261,22 +302,18 @@ while not done:
  
     # --- Drawing code should go here        (update game visuals / no logic here!)
     # draw a grid    
-    draw_grid(screen)
+    draw_grid(screen, size, SQUARE_SIZE)
     
     #update grid
     
     for k in grid_data:              
-        pos = size_manager.get_pos_by_row_and_col(k[0], k[1])        
-        pygame.draw.rect(screen, grid_data[k].Colour, [pos[0]+1 , pos[1]+1, size_manager.blockSize-1 ,  size_manager.blockSize-1])
+        pos = size_manager.get_pos_by_row_and_col(k[1], k[0])
+        print(pos)
+        pygame.draw.rect(screen, grid_data[k].Colour, [pos[1] + 1, pos[0] + 1, SQUARE_SIZE - 3, SQUARE_SIZE - 2])
     
     for k in [m for m in grid_data if grid_data[m].Square_Type == TILE_TYPE.OUTLINED]:
         marker_size = SQUARE_SIZE // 2
-        pos = size_manager.get_pos_by_row_and_col(k[0], k[1])
-        pygame.draw.rect(screen, COLOURS.BLACK, [pos[0] + marker_size // 2, pos[1] + marker_size // 2, marker_size, marker_size])
-    
-    #for k in grid_data:
-    #    draw_text_in_block(grid_data[k].Label, (k[1] * SQUARE_SIZE,k[0]*SQUARE_SIZE), screen)
-            
+        pygame.draw.rect(screen, COLOURS.BLACK, [k[0] + marker_size//2, k[1] + marker_size//2, marker_size, marker_size])            
     
     # --- Go ahead and update the screen with what we've drawn.
     pygame.display.flip()
