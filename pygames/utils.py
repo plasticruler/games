@@ -1,5 +1,6 @@
 from random import randrange, choice
 
+
 class COLOURS:
     BLACK = (0, 0, 0)
     WHITE = (255, 255, 255)
@@ -18,6 +19,7 @@ class COLOURS:
         else:
             return random.choice([COLOURS.WHITE, COLOURS.YELLOW, COLOURS.RED, COLOURS.INDIGO, COLOURS.GREEN, COLOURS.ORANGE, COLOURS.SKY_BLUE])
 
+
 class POS:
     def __init__(self, r, c):
         self.r = r
@@ -27,6 +29,9 @@ class POS:
     def r(self):
         return self.r
 
+    def __eq__(self, o):
+        return self.r == o.r and self.c == o.c
+        
     def __add__(self, o):
         return POS(self.r + o.r, self.c + o.c)
     
